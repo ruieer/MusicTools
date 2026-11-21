@@ -44,6 +44,15 @@ jobs:
 
       - name: Публикация релиза
         if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create ${{ github.ref_name }} dist/MusicTools.exe --generate-notes --title "Music Tools ${{ github.ref_name }}"
+        run: |
+          notes="docs/release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$notes" ]; then
+            gh release create "$GITHUB_REF_NAME" dist/MusicTools.exe \
+              --notes-file "$notes" --title "Music Tools $GITHUB_REF_NAME"
+          else
+            gh release create "$GITHUB_REF_NAME" dist/MusicTools.exe \
+              --generate-notes --title "Music Tools $GITHUB_REF_NAME"
+          fi
