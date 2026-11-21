@@ -27,6 +27,7 @@ import yt_dlp
 
 import audio_io
 import download_music as dm
+from core.i18n import tr
 
 REPORT = Path("report.csv")
 LOG = Path("manual_log.csv")
@@ -102,13 +103,13 @@ def grab(url, line, artist, title, cache):
     base = dm.OUT_DIR / dm.safe_filename(line)
     out = audio_io.out_path(base)
     try:
-        print("   скачиваю...")
+        print(tr("   скачиваю..."))
         dm.download(url, artist, title, base)
         out = audio_io.out_path(base)
         if not dm.check_audio_ok(out):
-            print("   ! файл выглядит подозрительно (пустой или длина вне диапазона "
-                  f"{dm.MIN_DUR}-{dm.MAX_DUR} с)")
-            if ask("   всё равно оставить? [д/Enter=нет]: ").lower() not in YES:
+            print(tr("   ! файл выглядит подозрительно (пустой или длина вне диапазона "
+                     "{low}-{high} с)", low=dm.MIN_DUR, high=dm.MAX_DUR))
+            if ask(tr("   всё равно оставить? [д/Enter=нет]: ")).lower() not in YES:
                 if out.exists():
                     out.unlink()
                 dm.pop_thumbnail(base)
@@ -119,11 +120,11 @@ def grab(url, line, artist, title, cache):
             dm.apply_tags(out, meta, cover or yt_cover, artist=artist, title=title)
             dm.save_cache(cache)
         except Exception as ex:
-            print(f"   (теги записать не удалось: {ex})")
-        print("   ✓ готово:", out.name)
+            print(tr("   (теги записать не удалось: {ex})", ex=ex))
+        print(tr("   ✓ готово:"), out.name)
         return True
     except Exception as ex:
-        print(f"   ОШИБКА скачивания: {ex}")
+        print(tr("   ОШИБКА скачивания: {ex}", ex=ex))
         if out.exists():
             out.unlink()
         return False
@@ -149,7 +150,7 @@ def handle_track(searcher, cache, line, status, url, found):
     def answer_loop(c_url):
         """Диалог по одному варианту. Возвращает 'downloaded' / 'next' / 'skipped' / 'quit'."""
         while True:
-            ans = ask("   скачать? [д]а / Enter=след. / [п]роп. / [о]поиск / ссылка / [й]=выход: ")
+            ans = ask(tr("   скачать? [д]а / Enter=след. / [п]роп. / [о]поиск / ссылка / [й]=выход: "))
             low = ans.lower()
             if low in YES:
                 if c_url and grab(c_url, line, artist, title, cache):
@@ -171,7 +172,7 @@ def handle_track(searcher, cache, line, status, url, found):
                     log(line, "downloaded", ans)
                     return "downloaded"
                 continue
-            print("   не понял, повторите")
+            print(tr("   не понял, повторите"))
 
     for c in candidates(searcher, query, url, found):
         dur = fmt_dur(c["duration"])
@@ -183,9 +184,9 @@ def handle_track(searcher, cache, line, status, url, found):
         if res != "next":
             return res
 
-    print("\n   Варианты закончились.")
+    print(tr("\n   Варианты закончились."))
     while True:
-        ans = ask("   ссылка / [о]поиск в браузере / [п]роп. навсегда / Enter=на потом / [й]=выход: ")
+        ans = ask(tr("   ссылка / [о]поиск в браузере / [п]роп. навсегда / Enter=на потом / [й]=выход: "))
         low = ans.lower()
         if low == "":
             return "later"
@@ -207,24 +208,25 @@ def handle_track(searcher, cache, line, status, url, found):
 
 def main():
     if not REPORT.exists():
-        print("Не найден report.csv - запускайте из папки, где лежит основной скрипт.")
+        print(tr("Не найден report.csv - запускайте из папки, где лежит основной скрипт."))
         return
     dm.OUT_DIR.mkdir(exist_ok=True)
     todo = load_todo()
-    print(f"К разбору: {len(todo)} треков (review/error/missing).")
+    print(tr("К разбору: {n} треков (review/error/missing).", n=len(todo)))
     cache = dm.load_cache()
     searcher = yt_dlp.YoutubeDL(
         {"quiet": True, "no_warnings": True, "extract_flat": True, "noplaylist": False})
 
     stats = {"downloaded": 0, "skipped": 0, "later": 0}
     for k, (line, status, url, found) in enumerate(todo, 1):
-        print(f"\n{'=' * 70}\n[{k}/{len(todo)}] {line}   (статус: {status})")
+        print(tr("\n{sep}\n[{k}/{total}] {line}   (статус: {status})",
+                 sep="=" * 70, k=k, total=len(todo), line=line, status=status))
         res = handle_track(searcher, cache, line, status, url, found)
         if res == "quit":
             break
         stats[res] = stats.get(res, 0) + 1
 
-    print("\nИтог:", stats)
+    print(tr("\nИтог:"), stats)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ DEFAULTS = {
     "lastfm_api_key": "",
     "accent_color": "#3b82f6",
     "audio_preset": "m4a_128",   # m4a/mp3 + 128/192/256
+    "language": "auto",         # auto (язык системы) / ru / en
 }
 
 

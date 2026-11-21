@@ -4,6 +4,8 @@
 """
 import queue
 import re
+import subprocess
+import sys
 from tkinter import TclError, ttk
 
 from core import env
@@ -12,7 +14,13 @@ env.setup()   # пути и PATH для ffmpeg - до импорта движк�
 
 import customtkinter as ctk  # noqa: E402
 
-from core import engine, settings, tools  # noqa: E402
+from core import i18n, settings  # noqa: E402
+from core.i18n import tr  # noqa: E402
+
+# язык ставим до импорта страниц: их заголовки и подсказки переводятся при импорте
+i18n.set_lang(settings.load().get("language"))
+
+from core import engine, tools  # noqa: E402
 from core.runner import Runner  # noqa: E402
 from ui.pages import PAGES  # noqa: E402
 from ui import theme as T  # noqa: E402
@@ -56,7 +64,7 @@ class App(ctk.CTk):
         side.grid_propagate(False)
         ctk.CTkLabel(side, text="Music Tools", font=ctk.CTkFont(size=22, weight="bold")
                      ).pack(anchor="w", padx=20, pady=(24, 0))
-        ctk.CTkLabel(side, text="музыка для iPod", text_color=T.MUTED).pack(anchor="w", padx=20, pady=(0, 18))
+        ctk.CTkLabel(side, text=tr("музыка для iPod"), text_color=T.MUTED).pack(anchor="w", padx=20, pady=(0, 18))
         self._nav = {}
         self._nav_active = None
         for key, title, _cls in PAGES:
@@ -103,16 +111,16 @@ class App(ctk.CTk):
         bar = ctk.CTkFrame(main, fg_color="transparent")
         bar.grid(row=2, column=0, sticky="ew")
         bar.grid_columnconfigure(1, weight=1)
-        self.stop_btn = ctk.CTkButton(bar, text="Остановить", width=120, fg_color=T.DANGER,
+        self.stop_btn = ctk.CTkButton(bar, text=tr("Остановить"), width=120, fg_color=T.DANGER,
                                       hover_color=T.DANGER_HOVER, text_color="#ffffff",
                                       state="disabled", command=self._stop)
         self.stop_btn.grid(row=0, column=0, padx=(0, 10))
         self.progress = ctk.CTkProgressBar(bar, progress_color=T.ACCENT, fg_color=T.CARD_BORDER)
         self.progress.grid(row=0, column=1, sticky="ew")
         self.progress.set(0)
-        self.status = ctk.CTkLabel(bar, text="Готово к работе", width=300, anchor="e")
+        self.status = ctk.CTkLabel(bar, text=tr("Готово к работе"), width=300, anchor="e")
         self.status.grid(row=0, column=2, padx=(12, 0))
-        ctk.CTkButton(bar, text="Очистить лог", width=110, fg_color=T.BUTTON_SOFT,
+        ctk.CTkButton(bar, text=tr("Очистить лог"), width=110, fg_color=T.BUTTON_SOFT,
                       hover_color=T.BUTTON_SOFT_HOVER, text_color=T.SOFT_TEXT,
                       command=self._clear_log).grid(row=0, column=3, padx=(12, 0))
 
@@ -121,12 +129,12 @@ class App(ctk.CTk):
                                        border_color=T.CARD_BORDER)
         self.prompt_box.grid(row=3, column=0, sticky="ew", pady=(10, 0))
         self.prompt_box.grid_columnconfigure(0, weight=1)
-        self.prompt_label = ctk.CTkLabel(self.prompt_box, text="Вопросов нет", anchor="w", text_color="gray60")
+        self.prompt_label = ctk.CTkLabel(self.prompt_box, text=tr("Вопросов нет"), anchor="w", text_color="gray60")
         self.prompt_label.grid(row=0, column=0, columnspan=2, sticky="ew", padx=14, pady=(10, 4))
-        self.entry = ctk.CTkEntry(self.prompt_box, placeholder_text="Ответ и Enter", state="disabled")
+        self.entry = ctk.CTkEntry(self.prompt_box, placeholder_text=tr("Ответ и Enter"), state="disabled")
         self.entry.grid(row=1, column=0, sticky="ew", padx=(14, 8))
         self.entry.bind("<Return>", lambda e: self._send())
-        self.send_btn = ctk.CTkButton(self.prompt_box, text="Отправить", width=110, state="disabled",
+        self.send_btn = ctk.CTkButton(self.prompt_box, text=tr("Отправить"), width=110, state="disabled",
                                       fg_color=T.BUTTON_SOFT, hover_color=T.BUTTON_SOFT_HOVER,
                                       text_color=T.SOFT_TEXT, command=self._send)
         self.send_btn.grid(row=1, column=1, padx=(0, 14))
@@ -237,24 +245,24 @@ class App(ctk.CTk):
 
     def start_job(self, title, fn, answers=(), quick=()):
         if self._job_running:
-            return self.say("Уже выполняется другая задача")
+            return self.say(tr("Уже выполняется другая задача"))
         try:
             engine.apply(self.cfg)
         except OSError as ex:
-            return self.say(f"Не могу открыть папку музыки: {ex}")
+            return self.say(tr("Не могу открыть папку музыки: {ex}", ex=ex))
         self._quick = quick if callable(quick) else (lambda _p, q=list(quick): q)
         self._job_title = title
         self._job_running = True
         self._log(f"\n━━━━ {title} ━━━━\n")
         self.progress.configure(mode="indeterminate")
         self.progress.start()
-        self.status.configure(text=f"Работает: {title}")
+        self.status.configure(text=tr("Работает: {title}", title=title))
         self._set_busy(True)
         self._hide_prompt()
         self.runner.start(fn, answers=answers)
 
     def _stop(self):
-        self.say("Останавливаю…")
+        self.say(tr("Останавливаю…"))
         self.runner.stop()
 
     # --- приём событий от фонового потока -----------------------------------
@@ -285,7 +293,8 @@ class App(ctk.CTk):
         self.progress.stop()
         self.progress.configure(mode="determinate")
         self.progress.set(min(int(done) / total, 1.0))
-        self.status.configure(text=f"{self._job_title}: {done} из {total}")
+        self.status.configure(text=tr("{title}: {done} из {total}",
+                                      title=self._job_title, done=done, total=total))
 
     def _finish(self, status):
         self._job_running = False
@@ -294,14 +303,16 @@ class App(ctk.CTk):
         self.progress.stop()
         self.progress.configure(mode="determinate")
         self.progress.set(1.0 if status == "done" else 0.0)
-        text = {"done": "Готово", "stopped": "Остановлено", "error": "Ошибка - см. лог"}.get(status, status)
+        text = {"done": tr("Готово"), "stopped": tr("Остановлено"),
+                "error": tr("Ошибка - см. лог")}.get(status, status)
         self.status.configure(text=text)
         self._log(f"— {text} —\n")
 
     # --- строка ответа ------------------------------------------------------
 
     def _show_prompt(self, prompt):
-        self.prompt_label.configure(text=prompt.strip() or "Введите ответ", text_color=("gray10", "gray90"))
+        self.prompt_label.configure(text=prompt.strip() or tr("Введите ответ"),
+                                    text_color=("gray10", "gray90"))
         self.entry.configure(state="normal")
         self.entry.delete(0, "end")
         self.send_btn.configure(state="normal", fg_color=T.ACCENT, hover_color=T.ACCENT_HOVER,
@@ -323,9 +334,9 @@ class App(ctk.CTk):
         for w in self.quick_row.winfo_children():
             w.destroy()
         if self._job_running:
-            self.prompt_label.configure(text="Задача работает…", text_color="gray60")
+            self.prompt_label.configure(text=tr("Задача работает…"), text_color="gray60")
         else:
-            self.prompt_label.configure(text="Вопросов нет", text_color="gray60")
+            self.prompt_label.configure(text=tr("Вопросов нет"), text_color="gray60")
 
     def _send(self):
         self._send_value(self.entry.get())
@@ -356,6 +367,13 @@ class App(ctk.CTk):
 
     def _check_tools(self):
         self._log(tools.report())
+
+    def restart(self):
+        """Перезапустить приложение - нужно после смены языка интерфейса."""
+        argv = ([sys.executable] if getattr(sys, "frozen", False)
+                else [sys.executable, str(env.APP_DIR / "app.py")])
+        subprocess.Popen(argv, cwd=str(env.APP_DIR))
+        self.destroy()
 
 
 def main():

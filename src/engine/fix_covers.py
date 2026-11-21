@@ -16,6 +16,7 @@ from PIL import Image
 
 import audio_io
 import download_music as dm
+from core.i18n import tr
 
 
 def main():
@@ -36,11 +37,13 @@ def main():
             data = dm.finish_cover(trimmed)
             audio_io.write_cover(f, data)
             fixed += 1
-            print(f"[{n}/{len(files)}] исправлено: {f.name}")
+            print(tr("[{n}/{total}] исправлено: {name}", n=n, total=len(files), name=f.name))
         except Exception as ex:
             errors += 1
-            print(f"[{n}/{len(files)}] ошибка: {f.name} ({ex})")
-    print(f"\nИсправлено: {fixed}, без полос: {unchanged}, без обложки: {no_cover}, ошибок: {errors}")
+            print(tr("[{n}/{total}] ошибка: {name} ({ex})", n=n, total=len(files),
+                     name=f.name, ex=ex))
+    print(tr("\nИсправлено: {fixed}, без полос: {unchanged}, без обложки: {none}, ошибок: {errors}",
+             fixed=fixed, unchanged=unchanged, none=no_cover, errors=errors))
 
 
 if __name__ == "__main__":

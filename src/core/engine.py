@@ -11,6 +11,7 @@ import replace_live
 import retag
 import ipod_library
 import ipod_transfer
+from core.i18n import tr
 from core.settings import music_dir
 
 LIST_FILE = Path("current_list.txt")   # относительно APP_DIR (см. core.env.setup)
@@ -27,7 +28,8 @@ def apply(cfg: dict) -> None:
                          or os.environ.get("LASTFM_API_KEY", "").strip())
     preset = cfg.get("audio_preset") or "m4a_128"
     audio_io.set_preset(preset)
-    print(f"[настройки] формат/качество: {audio_io.label()} кбит/с  (пресет: {audio_io.preset_id()})")
+    print(tr("[настройки] формат/качество: {label} кбит/с  (пресет: {preset})",
+             label=audio_io.label(), preset=audio_io.preset_id()))
 
 
 def write_list(lines) -> Path:
@@ -72,12 +74,12 @@ def collect_audio(source):
 
 
 def eject_ipod(root):
-    print(f"Извлечение {root}...")
+    print(tr("Извлечение {root}...", root=root))
     if ipod_transfer.eject(root):
-        print("iPod извлечён - можно отключать.")
+        print(tr("iPod извлечён - можно отключать."))
     else:
         print(ipod_transfer.eject_error() or
-              "Извлечь не удалось: закройте окна и программы, которые используют диск iPod, и повторите.")
+              tr("Извлечь не удалось: закройте окна и программы, которые используют диск iPod, и повторите."))
 
 
 def find_ipods():

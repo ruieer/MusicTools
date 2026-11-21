@@ -63,6 +63,7 @@ from rapidfuzz import fuzz
 from yt_dlp.utils import sanitize_filename
 
 import audio_io
+from core.i18n import tr
 
 SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID", "")
 SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET", "")
@@ -268,7 +269,7 @@ def make_cover_jpg(path: str):
                 img = trim_bars(img)
             return finish_cover(img)
         except Exception as ex:
-            print("  Pillow не справился, пробую ffmpeg:", ex)
+            print(tr("  Pillow не справился, пробую ffmpeg:"), ex)
     size = THUMB_SIZE
     if THUMB_MODE == "crop":
         vf = f"crop='min(iw,ih)':'min(iw,ih)',scale={size}:{size}"
@@ -281,10 +282,10 @@ def make_cover_jpg(path: str):
                 ["ffmpeg", "-y", "-i", path, "-frames:v", "1", "-vf", vf, "-q:v", "2", out],
                 capture_output=True)
         except FileNotFoundError:
-            print("  ffmpeg не найден в PATH - обложка не обработана")
+            print(tr("  ffmpeg не найден в PATH - обложка не обработана"))
             return None
         if r.returncode != 0 or not os.path.exists(out):
-            print("  ffmpeg не смог обработать обложку:",
+            print(tr("  ffmpeg не смог обработать обложку:"),
                   r.stderr.decode("utf-8", "ignore").strip().splitlines()[-1:])
             return None
         with open(out, "rb") as f:
@@ -346,7 +347,7 @@ def save_cache(cache: dict):
     try:
         CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
     except Exception as ex:
-        print("  не удалось сохранить кэш:", ex)
+        print(tr("  не удалось сохранить кэш:"), ex)
 
 
 def cache_key(artist: str, title: str) -> str:
@@ -1147,11 +1148,11 @@ def _ffmpeg_text_tags(path: Path, meta, artist: str, title: str):
     try:
         r = subprocess.run(cmd, capture_output=True)
     except FileNotFoundError:
-        print("  ffmpeg не найден — текстовые теги не записаны")
+        print(tr("  ffmpeg не найден — текстовые теги не записаны"))
         return
     if r.returncode != 0 or not tmp.exists() or tmp.stat().st_size < 1000:
         err = r.stderr.decode("utf-8", "ignore").strip().splitlines()
-        print("  ffmpeg не записал теги:", err[-1:] if err else r.returncode)
+        print(tr("  ffmpeg не записал теги:"), err[-1:] if err else r.returncode)
         if tmp.exists():
             tmp.unlink()
         return
@@ -1168,7 +1169,7 @@ def apply_tags(path: Path, meta, cover, artist: str = "", title: str = ""):
     try:
         audio_io.write_cover(path, cover)
     except Exception as ex:
-        print(f"  обложка не записалась: {ex}")
+        print(tr("  обложка не записалась: {ex}", ex=ex))
 
 
 # ---------------------------------------------------------------------------
@@ -1232,17 +1233,18 @@ def main():
     OUT_DIR.mkdir(exist_ok=True)
 
     if not (SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET):
-        print("Spotify: ключи не заданы, используется запасной режим без ключей (без жанров).")
+        print(tr("Spotify: ключи не заданы, используется запасной режим без ключей (без жанров)."))
     codec = audio_io.codec()
     bitrate = audio_io.bitrate()
     native = codec == "m4a" and bitrate == 128
     note = " (родной AAC YouTube, без перекодировки)" if native \
         else " (перекодировка через ffmpeg)"
-    print(f"[скачивание] формат: {codec.upper()}, битрейт: {bitrate} кбит/с{note}")
-    print(f"[скачивание] итоговый пресет: {audio_io.preset_id()}")
-    print("Метаданные: MusicBrainz → Spotify → Deezer → Bandcamp → Last.fm → YouTube")
-    print("Жанры приоритет: Last.fm → Deezer → остальные")
-    print("Кэш:", CACHE_FILE)
+    print(tr("[скачивание] формат: {codec}, битрейт: {bitrate} кбит/с{note}",
+             codec=codec.upper(), bitrate=bitrate, note=note))
+    print(tr("[скачивание] итоговый пресет: {preset}", preset=audio_io.preset_id()))
+    print(tr("Метаданные: MusicBrainz → Spotify → Deezer → Bandcamp → Last.fm → YouTube"))
+    print(tr("Жанры приоритет: Last.fm → Deezer → остальные"))
+    print(tr("Кэш:"), CACHE_FILE)
 
     cache = load_cache()
     searcher = yt_dlp.YoutubeDL(
@@ -1305,7 +1307,8 @@ def main():
                 status = "ok"
             except Exception as ex:
                 status = "error"
-                print(f"[{i}/{len(lines)}] ОШИБКА скачивания: {line} ({ex})")
+                print(tr("[{n}/{total}] ОШИБКА скачивания: {line} ({ex})", n=i,
+                         total=len(lines), line=line, ex=ex))
             if status == "ok":
                 yt_cover = pop_thumbnail(base)
                 try:
@@ -1318,7 +1321,8 @@ def main():
                     aa = (meta.get("album_artist") or artist or "-")
                     print(f"    albumartist={aa} | genre={g} | from={meta_src or '-'}")
                 except Exception as ex:
-                    print(f"[{i}/{len(lines)}] не удалось записать теги: {line} ({ex})")
+                    print(tr("[{n}/{total}] не удалось записать теги: {line} ({ex})", n=i,
+                             total=len(lines), line=line, ex=ex))
             rep.writerow([i, line, status, label, round(total), found, url, meta_src])
         elif any_c and any_c[0] >= REVIEW_MIN:
             total, label, found, url = any_c
@@ -1339,8 +1343,8 @@ def main():
     rep_f.close()
     nf_f.close()
     save_cache(cache)
-    print("\nИтог:", stats)
-    print("Сомнительные и ненайденные - в report.csv и not_found.txt")
+    print(tr("\nИтог:"), stats)
+    print(tr("Сомнительные и ненайденные - в report.csv и not_found.txt"))
 
 
 if __name__ == "__main__":

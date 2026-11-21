@@ -117,21 +117,22 @@ def log_row(path, gain_db, status):
 
 def main():
     dm.OUT_DIR.mkdir(exist_ok=True)
-    gain = parse_db(ask("Изменение громкости в дБ (например -3 или +4): "))
+    gain = parse_db(ask(tr("Изменение громкости в дБ (например -3 или +4): ")))
     if gain is None:
-        print("Не понял число. Пример: -3  или  +4,5")
+        print(tr("Не понял число. Пример: -3  или  +4,5"))
         return
     if gain == 0:
-        print("0 дБ - менять нечего.")
+        print(tr("0 дБ - менять нечего."))
         return
     if abs(gain) > SANITY_MAX_DB:
-        print(f"{gain:+g} дБ - слишком много (допустимо до ±{SANITY_MAX_DB}).")
+        print(tr("{gain} дБ - слишком много (допустимо до ±{limit}).",
+                  gain=f"{gain:+g}", limit=SANITY_MAX_DB))
         return
 
-    print("\n(Можно написать  все  - обработать всю папку music.)")
+    print(tr("\n(Можно написать  все  - обработать всю папку music.)"))
     entries = rt.gather()
     if not entries:
-        print("Ничего не введено.")
+        print(tr("Ничего не введено."))
         return
 
     if any(e.strip().lower() in {"все", "всё", "all"} for e in entries):
@@ -144,20 +145,21 @@ def main():
                 missing.append(e)
             files += [f for f in found if f not in files]
         if missing:
-            print(f"\nНе нашёл файлы для {len(missing)} строк:")
+            print(tr("\nНе нашёл файлы для {n} строк:", n=len(missing)))
             for m in missing:
                 print("   -", m)
     if not files:
         return
 
-    word = "ТИШЕ" if gain < 0 else "ГРОМЧЕ"
-    ans = ask(f"\nСделать {len(files)} файл(ов) {word} на {abs(gain):g} дБ? [д/Enter=нет]: ").lower()
+    word = tr("ТИШЕ") if gain < 0 else tr("ГРОМЧЕ")
+    ans = ask(tr("\nСделать {n} файл(ов) {word} на {db} дБ? [д/Enter=нет]: ",
+                 n=len(files), word=word, db=f"{abs(gain):g}")).lower()
     if ans not in {"д", "да", "y", "yes"}:
-        print("Отменено.")
+        print(tr("Отменено."))
         return
 
     workers = max(1, min(WORKERS, len(files)))
-    print(f"\nПотоков: {workers} (меняется параметром WORKERS в начале gain.py)\n")
+    print(tr("\nПотоков: {n} (меняется параметром WORKERS в начале gain.py)\n", n=workers))
     ok = fail = done = 0
     t0 = time.time()
 
@@ -174,16 +176,19 @@ def main():
             f, err = fut.result()
             done += 1
             if err is None:
-                print(f"[{done}/{len(files)}] ✓ {f.name}  ({gain:+g} дБ)")
+                print(tr("[{done}/{total}] ✓ {name}  ({gain} дБ)", done=done,
+                          total=len(files), name=f.name, gain=f"{gain:+g}"))
                 log_row(f, gain, "ok")
                 ok += 1
             else:
-                print(f"[{done}/{len(files)}] ОШИБКА {f.name}: {err}")
+                print(tr("[{done}/{total}] ОШИБКА {name}: {err}", done=done,
+                          total=len(files), name=f.name, err=err))
                 log_row(f, gain, f"error: {err}")
                 fail += 1
     mins = (time.time() - t0) / 60
-    print(f"\nЗатрачено: {mins:.1f} мин")
-    print(f"\nГотово: успешно {ok}, с ошибками {fail}. Оригиналы: {BACKUP_DIR}, журнал: {LOG}")
+    print(tr("\nЗатрачено: {mins} мин", mins=f"{mins:.1f}"))
+    print(tr("\nГотово: успешно {ok}, с ошибками {fail}. Оригиналы: {backup}, журнал: {log}",
+              ok=ok, fail=fail, backup=BACKUP_DIR, log=LOG))
 
 
 if __name__ == "__main__":

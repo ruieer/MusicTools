@@ -25,6 +25,7 @@ from rapidfuzz import fuzz
 
 import audio_io
 import download_music as dm
+from core.i18n import tr
 
 FORCE_REFRESH = True      # True = игнорировать кэш и искать теги заново
 FULL_SEARCH = True        # True = включить медленные, но полезные для андерграунда источники
@@ -112,7 +113,7 @@ def resolve(entry, index):
         if p.is_file():
             if audio_io.is_audio(p):
                 return [p]
-            print(f"   ! не m4a/mp3, пропускаю: {p.name}")
+            print(tr("   ! не m4a/mp3, пропускаю: {name}", name=p.name))
             return []
     except OSError:
         pass
@@ -130,8 +131,8 @@ def resolve(entry, index):
 
 
 def gather():
-    print("Вставляйте пути / имена треков / имя txt-файла (по одному в строке).")
-    print("Пустая строка = начать обработку.\n")
+    print(tr("Вставьте пути / имена треков / имя txt-файла (по одному в строке)."))
+    print(tr("Пустая строка = начать обработку.\n"))
     entries = []
     while True:
         line = ask("> ")
@@ -142,7 +143,7 @@ def gather():
             rows = Path(c).read_text(encoding="utf-8-sig").splitlines()
             rows = [r for r in rows if r.strip()]
             entries += rows
-            print(f"   из {Path(c).name} загружено строк: {len(rows)}")
+            print(tr("   из {name} загружено строк: {n}", name=Path(c).name, n=len(rows)))
         elif line.count('"') >= 2:                  # несколько путей в кавычках в одной строке
             entries += re.findall(r'"([^"]+)"', line)
         else:
@@ -155,18 +156,18 @@ def fill_manually(path, meta):
     need = [k for k in ("genres", "album", "date") if not meta.get(k)]
     if not need:
         return
-    print(f"   Не нашлось для {path.name}: " + ", ".join(
-        {"genres": "жанр", "album": "альбом", "date": "год"}[k] for k in need))
+    print(tr("   Не нашлось для {name}: {fields}", name=path.name, fields=", ".join(
+        {"genres": tr("жанр"), "album": tr("альбом"), "date": tr("год")}[k] for k in need)))
     if "genres" in need:
-        v = ask("   жанр: ")
+        v = ask(tr("   жанр: "))
         if v:
             meta["genres"] = [v]
     if "album" in need:
-        v = ask("   альбом: ")
+        v = ask(tr("   альбом: "))
         if v:
             meta["album"] = v
     if "date" in need:
-        v = ask("   год: ")
+        v = ask(tr("   год: "))
         if v:
             meta["date"] = v
 
@@ -187,7 +188,7 @@ def main():
         dm.USE_SPOTIFY_KEYLESS = True
     entries = gather()
     if not entries:
-        print("Ничего не введено.")
+        print(tr("Ничего не введено."))
         return
 
     index = music_index()
@@ -200,21 +201,21 @@ def main():
             if f not in files:
                 files.append(f)
     if missing:
-        print(f"\nНе нашёл файлы для {len(missing)} строк:")
+        print(tr("\nНе нашёл файлы для {n} строк:", n=len(missing)))
         for m in missing:
             print("   -", m)
     if not files:
         return
 
-    ans = ask("\nЗаменять обложки на найденные? [д = да / Enter = нет, "
-              "добавлю только там, где обложки нет]: ").lower()
+    ans = ask(tr("\nЗаменять обложки на найденные? [д = да / Enter = нет, "
+                 "добавлю только там, где обложки нет]: ")).lower()
     replace_cover = ans in {"д", "да", "y", "yes"}
 
-    ans = ask("Если жанр/альбом/год не нашлись - вводить вручную по каждому файлу? "
-              "[д = да / Enter = нет]: ").lower()
+    ans = ask(tr("Если жанр/альбом/год не нашлись - вводить вручную по каждому файлу? "
+                 "[д = да / Enter = нет]: ")).lower()
     manual = ans in {"д", "да", "y", "yes"}
 
-    print(f"\nК обработке: {len(files)} файлов\n")
+    print(tr("\nК обработке: {n} файлов\n", n=len(files)))
     cache = dm.load_cache()
     urls = load_urls()
     ok = fail = 0
@@ -233,20 +234,23 @@ def main():
             src = "+".join(used) or "-"
             alb, day, gen = read_back(f)
             print(f"[{i}/{len(files)}] {f.name}")
-            print(f"     записано: альбом={alb or '-'} | год={day or '-'} | жанр={gen or '-'}"
-                  f" | источники: {src}" + (" | +обложка" if use_cover else "")
-                  + ("" if url else " | (ссылки на видео нет)"))
+            print(tr("     записано: альбом={alb} | год={day} | жанр={gen} | источники: {src}",
+                     alb=alb or "-", day=day or "-", gen=gen or "-", src=src)
+                  + (" | " + tr("+обложка") if use_cover else "")
+                  + ("" if url else " | " + tr("(ссылки на видео нет)")))
             if not (alb or day or gen):
-                print("     ! ни один источник ничего не нашёл для этого трека")
+                print(tr("     ! ни один источник ничего не нашёл для этого трека"))
             log_row(f, artist, title, "ok", src)
             ok += 1
         except Exception as ex:
-            print(f"[{i}/{len(files)}] ОШИБКА {f.name}: {ex}")
+            print(tr("[{n}/{total}] ОШИБКА {name}: {ex}", n=i, total=len(files),
+                     name=f.name, ex=ex))
             log_row(f, artist, title, f"error: {ex}", "")
             fail += 1
         time.sleep(dm.SLEEP)
 
-    print(f"\nГотово: успешно {ok}, с ошибками {fail}. Журнал: {LOG}")
+    print(tr("\nГотово: успешно {ok}, с ошибками {fail}. Журнал: {log}",
+             ok=ok, fail=fail, log=LOG))
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ from rapidfuzz import fuzz
 
 import audio_io
 import download_music as dm
+from core.i18n import tr
 
 KEEP_BACKUP = True
 BACKUP_DIR = Path("replaced_backup")
@@ -63,7 +64,7 @@ def video_info(url):
                                "noplaylist": True, "skip_download": True}) as ydl:
             return ydl.extract_info(url, download=False) or {}
     except Exception as ex:
-        print(f"   (не удалось прочитать данные по ссылке: {ex})")
+        print(tr("   (не удалось прочитать данные по ссылке: {ex})", ex=ex))
         return {}
 
 
@@ -79,12 +80,12 @@ def pick_target(files, query):
     while True:
         matches = best_matches(query, files) if query else []
         if matches:
-            print("   Какой трек заменить?")
+            print(tr("   Какой трек заменить?"))
             for i, (sc, f) in enumerate(matches, 1):
                 print(f"   {i}) {f.stem}   ({int(sc)}%)")
         else:
-            print("   Совпадений нет.")
-        ans = ask("   номер / часть названия для поиска / Enter = отмена: ")
+            print(tr("   Совпадений нет."))
+        ans = ask(tr("   номер / часть названия для поиска / Enter = отмена: "))
         if not ans:
             return None
         if ans.isdigit() and 1 <= int(ans) <= len(matches):
@@ -99,13 +100,13 @@ def length(path):
 def replace_one(url, files):
     info = video_info(url)
     if info:
-        print(f"   Видео: {info.get('title', '?')} | "
-              f"{info.get('channel') or info.get('uploader') or ''} | "
-              f"{fmt_dur(info.get('duration'))}")
+        print(tr("   Видео: {title} | {channel} | {dur}", title=info.get('title', '?'),
+                 channel=info.get('channel') or info.get('uploader') or '',
+                 dur=fmt_dur(info.get('duration'))))
     query = f"{info.get('title', '')} {info.get('channel') or info.get('uploader') or ''}".strip()
     target = pick_target(files, query)
     if target is None:
-        print("   отменено")
+        print(tr("   отменено"))
         return False
 
     artist, title = dm.split_line(target.stem)
@@ -113,7 +114,7 @@ def replace_one(url, files):
     TMP_DIR.mkdir()
     base = TMP_DIR / "new"
     try:
-        print("   скачиваю...")
+        print(tr("   скачиваю..."))
         dm.download(url, artist, title, base)
         dm.pop_thumbnail(base)               # превью не нужно - обложка останется старая
         new = audio_io.find_downloaded(base)
@@ -136,7 +137,8 @@ def replace_one(url, files):
             dest.unlink()
         shutil.move(str(new), str(dest))
 
-        print(f"   ✓ заменено: {dest.name}   ({fmt_dur(old_len)} → {fmt_dur(new_len)})")
+        print(tr("   ✓ заменено: {name}   ({old} → {new})", name=dest.name,
+                 old=fmt_dur(old_len), new=fmt_dur(new_len)))
         is_new = not LOG.exists()
         with open(LOG, "a", newline="", encoding="utf-8-sig") as f:
             w = csv.writer(f)
@@ -145,7 +147,7 @@ def replace_one(url, files):
             w.writerow([dest.name, url, int(old_len), int(new_len)])
         return True
     except Exception as ex:
-        print(f"   ОШИБКА, старый файл не тронут: {ex}")
+        print(tr("   ОШИБКА, старый файл не тронут: {ex}", ex=ex))
         return False
     finally:
         shutil.rmtree(TMP_DIR, ignore_errors=True)
@@ -169,13 +171,14 @@ def download_new(url, cache):
     """Режим 'скачать': новый трек по ссылке, теги и обложка как в основном скрипте."""
     info = video_info(url)
     if info:
-        print(f"   Видео: {info.get('title', '?')} | "
-              f"{info.get('channel') or info.get('uploader') or ''} | "
-              f"{fmt_dur(info.get('duration'))}")
+        print(tr("   Видео: {title} | {channel} | {dur}", title=info.get('title', '?'),
+                 channel=info.get('channel') or info.get('uploader') or '',
+                 dur=fmt_dur(info.get('duration'))))
     guess = guess_name(info)
-    name = ask(f"   Имя файла [Enter = {guess or 'ввести вручную'}]: ") or guess
+    name = ask(tr("   Имя файла [Enter = {hint}]: ",
+                  hint=guess or tr("ввести вручную"))) or guess
     if not name:
-        print("   отменено (имя не задано)")
+        print(tr("   отменено (имя не задано)"))
         return False
 
     artist, title = dm.split_line(name)
@@ -183,11 +186,11 @@ def download_new(url, cache):
     base = dm.OUT_DIR / dm.safe_filename(name)
     out = audio_io.find_existing(base)
     if out:
-        print(f"   ! файл уже есть: {out.name}\n"
-              "   для подмены переключитесь в режим замены (введите з)")
+        print(tr("   ! файл уже есть: {name}\n"
+                 "   для подмены переключитесь в режим замены (введите з)", name=out.name))
         return False
     try:
-        print("   скачиваю...")
+        print(tr("   скачиваю..."))
         dm.download(url, artist, title, base)
         yt_cover = dm.pop_thumbnail(base)
         out = audio_io.out_path(base)
@@ -198,8 +201,9 @@ def download_new(url, cache):
             dm.apply_tags(out, meta, cover or yt_cover, artist=artist, title=title)
             dm.save_cache(cache)
         except Exception as ex:
-            print(f"   (теги записать не удалось: {ex})")
-        print(f"   ✓ скачано: {out.name}   ({fmt_dur(length(out))})")
+            print(tr("   (теги записать не удалось: {ex})", ex=ex))
+        print(tr("   ✓ скачано: {name}   ({dur})", name=out.name,
+                 dur=fmt_dur(length(out))))
         is_new = not DOWNLOAD_LOG.exists()
         with open(DOWNLOAD_LOG, "a", newline="", encoding="utf-8-sig") as f:
             w = csv.writer(f)
@@ -208,7 +212,7 @@ def download_new(url, cache):
             w.writerow([out.name, url])
         return True
     except Exception as ex:
-        print(f"   ОШИБКА скачивания: {ex}")
+        print(tr("   ОШИБКА скачивания: {ex}", ex=ex))
         if out and out.exists():
             out.unlink()
         dm.pop_thumbnail(base)
@@ -223,31 +227,31 @@ def main():
     dm.OUT_DIR.mkdir(exist_ok=True)
     cache = dm.load_cache()
     mode = "download"
-    print("Режим: СКАЧАТЬ. Вставляйте ссылки. "
-          "Переключение: з = замена, с = скачать. Enter без текста = выход.")
+    print(tr("Режим: СКАЧАТЬ. Вставляйте ссылки. "
+             "Переключение: з = замена, с = скачать. Enter без текста = выход."))
     while True:
-        label = "СКАЧАТЬ" if mode == "download" else "ЗАМЕНА"
-        ans = ask(f"\n[{label}] Ссылка: ")
+        label = tr("СКАЧАТЬ") if mode == "download" else tr("ЗАМЕНА")
+        ans = ask(tr("\n[{label}] Ссылка: ", label=label))
         low = ans.lower()
         if not ans:
             break
         if low in MODE_REPLACE:
             mode = "replace"
-            print("   режим: ЗАМЕНА существующего файла")
+            print(tr("   режим: ЗАМЕНА существующего файла"))
             continue
         if low in MODE_DOWNLOAD:
             mode = "download"
-            print("   режим: СКАЧАТЬ новый трек")
+            print(tr("   режим: СКАЧАТЬ новый трек"))
             continue
         if not low.startswith("http"):
-            print("   нужна ссылка, начинающаяся с http (или з / с для смены режима)")
+            print(tr("   нужна ссылка, начинающаяся с http (или з / с для смены режима)"))
             continue
         if mode == "download":
             download_new(ans, cache)
         else:
             files = audio_io.list_audio(dm.OUT_DIR)   # обновляем список после скачиваний
             if not files:
-                print(f"   в папке {dm.OUT_DIR} нет m4a/mp3 - заменять нечего")
+                print(tr("   в папке {folder} нет m4a/mp3 - заменять нечего", folder=dm.OUT_DIR))
                 continue
             replace_one(ans, files)
 

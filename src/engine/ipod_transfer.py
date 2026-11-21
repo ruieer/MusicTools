@@ -17,6 +17,7 @@ from pathlib import Path
 
 import windows_eject
 from core.env import APP_DIR
+from core.i18n import tr
 
 COMPATIBLE = {".mp3", ".m4a", ".m4b", ".aac", ".wav", ".aiff", ".aif"}
 AUDIO_EXTS = COMPATIBLE | {".flac", ".opus", ".ogg", ".wma"}
@@ -192,14 +193,14 @@ def _ffmpeg():
             if ok:
                 _FFMPEG.append(str(exe))
                 return str(exe)
-            print(f"Пропускаю неработающий ffmpeg: {exe}")
+            print(tr("Пропускаю неработающий ffmpeg: {exe}", exe=exe))
     return None
 
 
 def _convert(source: Path, dest: Path):
     ffmpeg = _ffmpeg()
     if not ffmpeg:
-        raise RuntimeError("Для конвертации нужен ffmpeg из папки bin или переменной PATH")
+        raise RuntimeError(tr("Для конвертации нужен ffmpeg из папки bin или переменной PATH"))
     dest.parent.mkdir(parents=True, exist_ok=True)
     temp = dest.with_name(dest.stem + ".part.m4a")
     command = [ffmpeg, "-y", "-loglevel", "error", "-i", str(source), "-map", "0:a:0",
@@ -209,9 +210,9 @@ def _convert(source: Path, dest: Path):
     if result.returncode or not temp.is_file():
         temp.unlink(missing_ok=True)
         if result.returncode & 0xFFFFFFFF == 0xC0000135:
-            raise RuntimeError(f"{ffmpeg} не запускается: рядом нет нужных DLL. Положите в bin "
-                               "полную (static/essentials) сборку ffmpeg.exe")
-        raise RuntimeError(result.stderr.decode("utf-8", "replace")[-2000:] or "Ошибка ffmpeg")
+            raise RuntimeError(tr("{exe} не запускается: рядом нет нужных DLL. Положите в bin "
+                                  "полную (static/essentials) сборку ffmpeg.exe", exe=ffmpeg))
+        raise RuntimeError(result.stderr.decode("utf-8", "replace")[-2000:] or tr("Ошибка ffmpeg"))
     os.replace(temp, dest)
 
 
@@ -268,7 +269,7 @@ def _backup_files(root: Path):
 def _backup_device_databases(root: Path) -> Path:
     files = _backup_files(root)
     if not any(name == "iTunesDB" for _, name in files):
-        raise RuntimeError("На устройстве не найдена iTunesDB; передача отменена")
+        raise RuntimeError(tr("На устройстве не найдена iTunesDB; передача отменена"))
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     backup_dir = root / "iPod_Control" / "iTunes" / "MusicToolsBackups" / stamp
     (backup_dir / "Artwork").mkdir(parents=True, exist_ok=False)
@@ -301,7 +302,8 @@ def _remove_copied(root: Path, tracks, why: str) -> None:
         try:
             copied.unlink(missing_ok=True)
         except OSError as exc:
-            print(f"Не удалось удалить файл {why} {copied}: {exc}")
+            print(tr("Не удалось удалить файл {why} {path}: {exc}",
+                     why=why, path=copied, exc=exc))
 
 
 # --- передача ---------------------------------------------------------------
@@ -310,14 +312,17 @@ def _pick_device(device_root):
     if device_root:
         root = Path(device_root)
         if not is_ipod_root(root):
-            raise RuntimeError(f"{root}: нет iPod_Control/iTunes/iTunesDB - это не iPod или он не смонтирован")
+            raise RuntimeError(tr("{root}: нет iPod_Control/iTunes/iTunesDB - это не iPod "
+                                  "или он не смонтирован", root=root))
         return describe(root)
     devices = find_ipods()
     if not devices:
-        raise RuntimeError("iPod не найден: смонтированный том должен содержать iPod_Control/iTunes/iTunesDB")
+        raise RuntimeError(tr("iPod не найден: смонтированный том должен содержать "
+                              "iPod_Control/iTunes/iTunesDB"))
     if len(devices) > 1:
         names = ", ".join(str(d["root"]) for d in devices)
-        raise RuntimeError(f"Подключено несколько iPod ({names}) - выберите нужный в списке")
+        raise RuntimeError(tr("Подключено несколько iPod ({names}) - выберите нужный в списке",
+                              names=names))
     return devices[0]
 
 
@@ -326,25 +331,26 @@ def transfer(source_files, device_root=None, assume_nano2g=False, allow_other_mo
     """Скопировать аудио и обновить iTunesDB, не запуская и не используя iTunes."""
     import pygpod
 
-    print("Поиск подключённого iPod...")
+    print(tr("Поиск подключённого iPod..."))
     device = _pick_device(device_root)
     root = Path(device["root"])
-    print(f"Устройство: {device['model']} — {root}")
+    print(tr("Устройство: {model} — {root}", model=device['model'], root=root))
 
     running = _running(SYNC_PROCESSES)
     if running:
-        raise RuntimeError(f"Закройте {running} перед автономной передачей: он может перезаписать базу iPod")
+        raise RuntimeError(tr("Закройте {names} перед автономной передачей: "
+                              "он может перезаписать базу iPod", names=running))
     if _running(HELPER_PROCESSES):
-        print("Внимание: работает iTunesHelper - он может сам запустить iTunes. Если iTunes откроется, "
-              "закройте его до конца передачи.")
+        print(tr("Внимание: работает iTunesHelper - он может сам запустить iTunes. Если iTunes откроется, "
+                 "закройте его до конца передачи."))
 
     incoming = [Path(p) for p in source_files]
-    print(f"Файлов для обработки: {len(incoming)}")
+    print(tr("Файлов для обработки: {n}", n=len(incoming)))
     if not incoming:
-        raise RuntimeError("Не найдено доступных аудиофайлов")
+        raise RuntimeError(tr("Не найдено доступных аудиофайлов"))
     missing = [path for path in incoming if not path.is_file()]
     if missing:
-        raise RuntimeError(f"Файл не найден: {missing[0]}")
+        raise RuntimeError(tr("Файл не найден: {path}", path=missing[0]))
 
     detected = pygpod.Device.from_mountpoint(str(root))
     ok, note = check_model(detected, assume_nano2g, allow_other_models)
@@ -353,30 +359,31 @@ def transfer(source_files, device_root=None, assume_nano2g=False, allow_other_mo
     print(note)
 
     if pygpod.db.transaction.interrupted_commit(str(root)):
-        raise RuntimeError("На iPod осталась незавершённая запись базы. Запустите передачу ещё раз "
-                           "после проверки iPod или восстановите копию из MusicToolsBackups")
+        raise RuntimeError(tr("На iPod осталась незавершённая запись базы. Запустите передачу ещё раз "
+                              "после проверки iPod или восстановите копию из MusicToolsBackups"))
 
     db = pygpod.Database(str(root), config=pygpod.DatabaseConfig(otg_on_save="keep"),
                          apply_play_counts=False, recover=False)
     if getattr(db, "damage", None):
-        raise RuntimeError("iTunesDB повреждена или прочитана не полностью; запись отменена: "
-                           + "; ".join(db.damage))
-    print(f"Треков на iPod: {len(db.tracks)}")
+        raise RuntimeError(tr("iTunesDB повреждена или прочитана не полностью; запись отменена: {why}",
+                              why="; ".join(db.damage)))
+    print(tr("Треков на iPod: {n}", n=len(db.tracks)))
     artwork = with_artwork and bool(detected.supports_artwork)
     if with_artwork and not artwork:
-        print("Эта модель не показывает обложки - они не добавляются.")
+        print(tr("Эта модель не показывает обложки - они не добавляются."))
 
     converted_dir = APP_DIR / "ipod_convert_cache"
     converted_dir.mkdir(parents=True, exist_ok=True)
     prepared = []
     for index, source in enumerate(incoming, 1):
-        print(f"Подготовка [{index}/{len(incoming)}]: {source.name}")
+        print(tr("Подготовка [{index}/{total}]: {name}", index=index,
+                 total=len(incoming), name=source.name))
         try:
             prepared.append((source, _prepare_audio(source, converted_dir)))
         except Exception as exc:  # noqa: BLE001 - один плохой файл не останавливает остальные
-            print(f"   пропуск, не удалось подготовить: {exc}")
+            print(tr("   пропуск, не удалось подготовить: {exc}", exc=exc))
     if not prepared:
-        raise RuntimeError("Ни один файл не удалось подготовить")
+        raise RuntimeError(tr("Ни один файл не удалось подготовить"))
 
     hashes = {}
     sizes = set()
@@ -384,26 +391,28 @@ def transfer(source_files, device_root=None, assume_nano2g=False, allow_other_mo
         hashes[path] = _sha256(path)
         sizes.add(path.stat().st_size)
 
-    print("Сверка с треками в базе iPod...")
+    print(tr("Сверка с треками в базе iPod..."))
     existing = {}
     candidates = [t for t in db.tracks if t.file_size in sizes and t.ipod_path]
     for index, track in enumerate(candidates, 1):
         try:
             existing.setdefault(_sha256(_ipod_file(root, track.ipod_path)), track)
         except OSError as exc:
-            print(f"Не удалось проверить существующий трек {track.ipod_path}: {exc}")
+            print(tr("Не удалось проверить существующий трек {path}: {exc}",
+                     path=track.ipod_path, exc=exc))
         if index % 50 == 0:
-            print(f"Проверено совпадающих треков: {index}/{len(candidates)}")
-    print(f"Совпадающих по размеру треков: {len(candidates)}")
+            print(tr("Проверено совпадающих треков: {done}/{total}",
+                     done=index, total=len(candidates)))
+    print(tr("Совпадающих по размеру треков: {n}", n=len(candidates)))
 
     selected, files_to_add, already = set(), [], []
     for source, path in prepared:
         digest = hashes[path]
         if digest in existing:
-            print(f"Уже на iPod: {source.name}")
+            print(tr("Уже на iPod: {name}", name=source.name))
             already.append(existing[digest])
         elif digest in selected:
-            print(f"Повтор в выбранном списке: {source.name}")
+            print(tr("Повтор в выбранном списке: {name}", name=source.name))
         else:
             selected.add(digest)
             files_to_add.append((source, path))
@@ -414,21 +423,22 @@ def transfer(source_files, device_root=None, assume_nano2g=False, allow_other_mo
         present = {t.track_id for t in playlist.tracks} if playlist else set()
         playlist_missing = [t for t in already if t.track_id not in present]
     if not files_to_add and not playlist_missing:
-        print("Новых треков нет - база iPod не менялась.")
+        print(tr("Новых треков нет - база iPod не менялась."))
         return 0
 
     required = sum(path.stat().st_size for _s, path in files_to_add) + 5 * 1024 * 1024
     free = shutil.disk_usage(root).free
     if required > free:
-        raise RuntimeError(f"Недостаточно места на iPod: нужно около {required // 2**20} МБ, "
-                           f"свободно {free // 2**20} МБ")
+        raise RuntimeError(tr("Недостаточно места на iPod: нужно около {need} МБ, свободно {free} МБ",
+                              need=required // 2**20, free=free // 2**20))
 
     backup_dir = _backup_device_databases(root)
-    print(f"Резервная копия базы: {backup_dir}")
+    print(tr("Резервная копия базы: {path}", path=backup_dir))
     added = []
     try:
         for index, (source, path) in enumerate(files_to_add, 1):
-            print(f"Добавление [{index}/{len(files_to_add)}]: {source.name}")
+            print(tr("Добавление [{index}/{total}]: {name}", index=index,
+                     total=len(files_to_add), name=source.name))
             fields = _track_fields(source, artwork)
             try:
                 added.append(db.add_track(str(path), copy=True, **fields))
@@ -437,7 +447,7 @@ def transfer(source_files, device_root=None, assume_nano2g=False, allow_other_mo
             except Exception as exc:  # noqa: BLE001
                 if "cover_art" not in fields or not fields["cover_art"]:
                     raise
-                print(f"   обложку добавить не удалось ({exc}), трек без обложки")
+                print(tr("   обложку добавить не удалось ({exc}), трек без обложки", exc=exc))
                 fields["cover_art"] = b""
                 added.append(db.add_track(str(path), copy=True, **fields))
         if playlist_name:
@@ -447,35 +457,37 @@ def transfer(source_files, device_root=None, assume_nano2g=False, allow_other_mo
                 if track.track_id not in present:
                     db.add_track_to_playlist(playlist, track)
                     present.add(track.track_id)
-            print(f"Плейлист «{playlist_name}»: треков {len(present)}")
-        print("Сохранение iTunesDB...")
+            print(tr("Плейлист «{name}»: треков {n}", name=playlist_name, n=len(present)))
+        print(tr("Сохранение iTunesDB..."))
         db.save()
     except BaseException:
         try:
             current = pygpod.Database(str(root), apply_play_counts=False, recover=False)
             committed = {track.dbid for track in current.tracks}
         except Exception as exc:  # noqa: BLE001
-            print(f"Не удалось определить, завершилась ли запись базы: {exc}")
-            print(f"Скопированные файлы не удаляю; резервная копия: {backup_dir}")
+            print(tr("Не удалось определить, завершилась ли запись базы: {exc}", exc=exc))
+            print(tr("Скопированные файлы не удаляю; резервная копия: {path}", path=backup_dir))
             raise
         if not any(track.dbid in committed for track in added):
-            _remove_copied(root, added, "после отмены")
+            _remove_copied(root, added, tr("после отмены"))
         raise
 
-    print("Проверка записанной базы...")
+    print(tr("Проверка записанной базы..."))
     verified = pygpod.Database(str(root), apply_play_counts=False, recover=False)
     verified_ids = {track.dbid for track in verified.tracks}
     lost = [t for t in added if t.dbid not in verified_ids]
     if lost or getattr(verified, "damage", None):
         _restore_backup_files(backup_dir, root)
-        _remove_copied(root, added, "после отката")
-        raise RuntimeError(f"Не удалось подтвердить новые записи; база восстановлена из копии {backup_dir}")
+        _remove_copied(root, added, tr("после отката"))
+        raise RuntimeError(tr("Не удалось подтвердить новые записи; база восстановлена из копии {path}",
+                              path=backup_dir))
 
-    print(f"Передача завершена: добавлено треков {len(added)}, всего на iPod {len(verified.tracks)}")
+    print(tr("Передача завершена: добавлено треков {added}, всего на iPod {total}",
+             added=len(added), total=len(verified.tracks)))
     if eject_after:
-        print("Извлечение iPod...")
-        print("iPod извлечён - можно отключать." if eject(root) else
-              "Извлечь автоматически не удалось - используйте «Безопасное извлечение устройства».")
+        print(tr("Извлечение iPod..."))
+        print(tr("iPod извлечён - можно отключать.") if eject(root) else
+              tr("Извлечь автоматически не удалось - используйте «Безопасное извлечение устройства»."))
     else:
-        print("Перед отключением используйте «Безопасное извлечение устройства» в Windows.")
+        print(tr("Перед отключением используйте «Безопасное извлечение устройства» в Windows."))
     return len(added)

@@ -4,5 +4,6 @@
   "spotify_client_secret": "",
   "lastfm_api_key": "",
   "accent_color": "#8b5cf6",
-  "audio_preset": "m4a_128"
+  "audio_preset": "m4a_128",
+  "language": "auto"
 }
