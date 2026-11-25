@@ -1,0 +1,23 @@
+# Сборка
+build/
+dist/
+*.exe
+
+# ffmpeg/ffprobe кладутся в bin/ при сборке (слишком большие для репозитория)
+bin/*.exe
+
+# Данные приложения создаются рядом с exe
+config.json
+meta_cache.json
+*.csv
+*.log
+music/
+ipod_convert_cache/
+tools/
+
+# Служебное
+__pycache__/
+*.pyc
+.venv/
+backup/
+_shot.png

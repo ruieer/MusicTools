@@ -1,0 +1,65 @@
+name: Build exe
+
+# Собирает самодостаточный MusicTools.exe (Python, yt-dlp, ffmpeg и ffprobe внутри).
+# Запуск: вручную (Actions -> Build exe -> Run workflow) или тегом v*.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: ffmpeg и ffprobe в bin
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile ff.zip
+          Expand-Archive ff.zip -DestinationPath ff
+          Get-ChildItem ff -Recurse -Filter ffmpeg.exe  | Select-Object -First 1 | Copy-Item -Destination bin/ffmpeg.exe
+          Get-ChildItem ff -Recurse -Filter ffprobe.exe | Select-Object -First 1 | Copy-Item -Destination bin/ffprobe.exe
+          Get-Item bin/ffmpeg.exe, bin/ffprobe.exe | Select-Object Name, Length
+
+      - name: Сборка
+        run: python -m PyInstaller --noconfirm --clean MusicTools.spec
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MusicTools-exe
+          path: dist/MusicTools.exe
+
+      - name: Публикация релиза
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          notes="docs/release-notes/${tag}.md"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Релиз $tag уже существует — обновляю файл и заметки"
+            gh release upload "$tag" dist/MusicTools.exe --clobber
+            if [ -f "$notes" ]; then
+              gh release edit "$tag" --notes-file "$notes"
+            fi
+          elif [ -f "$notes" ]; then
+            gh release create "$tag" dist/MusicTools.exe \
+              --notes-file "$notes" --title "Music Tools $tag"
+          else
+            gh release create "$tag" dist/MusicTools.exe \
+              --generate-notes --title "Music Tools $tag"
+          fi
